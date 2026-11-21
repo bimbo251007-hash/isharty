@@ -77,15 +77,16 @@ jobs:
           npx cap sync android
       - run: ./gradlew assembleDebug
         working-directory: project/android
-      - name: Publish APK to Releases (direct download, not zipped)
+      - name: Publish APK to a fixed download link
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           cp android/app/build/outputs/apk/debug/app-debug.apk Esharaty.apk
-          gh release create "apk-${{ github.run_number }}" Esharaty.apk \
+          gh release delete latest-apk --cleanup-tag --yes --repo "${{ github.repository }}" || true
+          gh release create latest-apk Esharaty.apk \
             --repo "${{ github.repository }}" \
             --target "${{ github.sha }}" \
-            --title "Esharaty APK #${{ github.run_number }}" \
+            --title "Esharaty APK (latest)" \
             --notes "ملف APK جاهز للتثبيت على أندرويد"
 
   desktop:
@@ -113,15 +114,20 @@ jobs:
           node-version: 20
       - run: npm install
       - run: npm run dist
-      - name: Publish installer to Releases (direct download, not zipped)
+      - name: Publish installer to a fixed download link
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           shopt -s nullglob
-          files=(dist/*.exe dist/*.dmg dist/*.AppImage)
-          gh release create "desktop-${{ github.run_number }}-${{ runner.os }}" "${files[@]}" \
+          mkdir out
+          for f in dist/*.exe dist/*.dmg dist/*.AppImage; do
+            cp "$f" "out/Esharaty-${{ runner.os }}.${f##*.}"
+          done
+          TAG="latest-${{ runner.os }}"
+          gh release delete "$TAG" --cleanup-tag --yes --repo "${{ github.repository }}" || true
+          gh release create "$TAG" out/* \
             --repo "${{ github.repository }}" \
             --target "${{ github.sha }}" \
-            --title "Esharaty Desktop (${{ runner.os }}) #${{ github.run_number }}" \
+            --title "Esharaty Desktop ${{ runner.os }} (latest)" \
             --notes "مثبّت التطبيق لسطح المكتب"
