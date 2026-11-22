@@ -9,12 +9,14 @@ permissions:
   contents: read
 
 jobs:
+  # 1) يفك ملف الـ zip الموجود في الـ repository
   prepare:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Unzip project
         run: |
+          if [ "$(ls *.zip | wc -l)" -ne 1 ]; then echo "::error::لازم يكون في ملف zip واحد بس في الـ repository"; exit 1; fi
           ZIP=$(ls *.zip | head -1)
           echo "Using $ZIP"
           mkdir extracted
@@ -26,6 +28,7 @@ jobs:
           name: project
           path: project
 
+  # 2) ينشر الموقع على GitHub Pages (تلقائي مع كل push)
   pages:
     needs: prepare
     runs-on: ubuntu-latest
@@ -49,6 +52,7 @@ jobs:
       - id: deployment
         uses: actions/deploy-pages@v4
 
+  # 3) ملف APK لأندرويد (تشغيل يدوي: Run workflow)
   android:
     if: github.event_name == 'workflow_dispatch'
     needs: prepare
@@ -72,9 +76,17 @@ jobs:
           java-version: 17
       - run: npm install
       - run: npm run build:web
+      - name: Use fixed signing key (so updates install over the old app)
+        env:
+          KS: ${{ secrets.DEBUG_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$KS" ]; then echo "::error::Missing secret DEBUG_KEYSTORE_BASE64"; exit 1; fi
+          mkdir -p ~/.android
+          echo "$KS" | base64 -d > ~/.android/debug.keystore
       - run: |
           npx cap add android
           npx cap sync android
+          sed -i "s/versionCode 1/versionCode ${{ github.run_number }}/" android/app/build.gradle
       - run: ./gradlew assembleDebug
         working-directory: project/android
       - name: Publish APK to a fixed download link
